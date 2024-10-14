@@ -1,65 +1,45 @@
 import cv2
-import mediapipe as mp
-import pandas as pd
-import time
+import os
+import imutils
 
-mp_drawing = mp.solutions.drawing_utils
-mp_face_mesh = mp.solutions.face_mesh
+emotionName = 'Enojo'
+#emotionName = 'Felicidad'
+#emotionName = 'Sorpresa'
+#emotionName = 'Tristeza'
 
-cap = cv2.VideoCapture(0)
-cap.set(3, 1280)
-cap.set(4, 720)
+dataPath = 'C:/Users/sulli/PycharmProjects/faceId/Data' #Cambia a la ruta donde hayas almacenado Data
+emotionsPath = dataPath + '/' + emotionName
 
-# Inicializar Face Mesh
-face_mesh = mp_face_mesh.FaceMesh(max_num_faces=1)
+if not os.path.exists(emotionsPath):
+	print('Carpeta creada: ',emotionsPath)
+	os.makedirs(emotionsPath)
 
-# Lista para almacenar los datos
-data = []
+cap = cv2.VideoCapture(0,cv2.CAP_DSHOW)
 
-# Definir emociones
-emotions = ["Feliz", "Triste", "Enojado", "Asombrado"]
+faceClassif = cv2.CascadeClassifier(cv2.data.haarcascades+'haarcascade_frontalface_default.xml')
+count = 0
 
-# Preguntar al usuario qué emoción quiere capturar
-for emotion in emotions:
-    print(f"Coloca tu cara en la cámara y haz la expresión: {emotion}")
-    time.sleep(5)  # Espera 5 segundos para que el usuario se prepare
+while True:
 
-    while True:
-        ret, frame = cap.read()
-        if not ret:
-            break
+	ret, frame = cap.read()
+	if ret == False: break
+	frame =  imutils.resize(frame, width=640)
+	gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+	auxFrame = frame.copy()
 
-        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        results = face_mesh.process(frame_rgb)
+	faces = faceClassif.detectMultiScale(gray,1.3,5)
 
-        if results.multi_face_landmarks:
-            for face_landmarks in results.multi_face_landmarks:
-                # Inicializar la lista para la malla facial
-                landmark_data = []
-                for landmark in face_landmarks.landmark:
-                    landmark_data.append([landmark.x, landmark.y, landmark.z])
+	for (x,y,w,h) in faces:
+		cv2.rectangle(frame, (x,y),(x+w,y+h),(0,255,0),2)
+		rostro = auxFrame[y:y+h,x:x+w]
+		rostro = cv2.resize(rostro,(150,150),interpolation=cv2.INTER_CUBIC)
+		cv2.imwrite(emotionsPath + '/rotro_{}.jpg'.format(count),rostro)
+		count = count + 1
+	cv2.imshow('frame',frame)
 
-                # Aplanar la lista de puntos de referencia para que quede en un solo nivel
-                flat_landmark_data = [coord for landmark in landmark_data for coord in landmark]
-
-                # Agregar la emoción como etiqueta
-                flat_landmark_data.append(emotion)
-
-                # Agregar los datos a la lista
-                data.append(flat_landmark_data)
-
-                # Dibujar la malla facial
-                mp_drawing.draw_landmarks(frame, face_landmarks, mp_face_mesh.FACEMESH_TESSELATION)
-
-        cv2.imshow('Frame', frame)
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            break
+	k =  cv2.waitKey(1)
+	if k == 27 or count >= 200:
+		break
 
 cap.release()
 cv2.destroyAllWindows()
-
-# Guardar los datos en un DataFrame
-num_landmarks = 468  # Número de puntos de referencia de la malla facial
-df = pd.DataFrame(data, columns=[f'landmark_{i}_{axis}' for i in range(num_landmarks) for axis in ['x', 'y', 'z']] + [
-    'emotion'])
-df.to_csv('facial_expressions.csv', index=False)
